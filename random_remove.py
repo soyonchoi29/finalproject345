@@ -6,40 +6,73 @@ from pysmt.shortcuts import reset_env
 import argparse
 import subprocess
 
+
 def load_smt2_script(file_path):
+    """
+    Loads an .smt2 script from a file path.
+    :param file_path: path to file
+    """
+
     reset_env()
     parser = SmtLibParser()
     return parser.get_script_fname(file_path)
 
-def remove_random_asserts(script: SmtLibScript, num_to_remove: int):
-    new_commands = []
+
+def remove_random_asserts(script: SmtLibScript, num_to_remove: int, verbose: bool = False, seed: int = 42):
+    """
+    Removes random assertions from a given script.
+    :param script: SmtLibScript instance.
+    :param num_to_remove: Number of assertions to remove.
+    :param verbose: Toggles debugging statements.
+    :param seed: Seed for PRNG that chooses assertions to remove.
+    """
+
     assert_cmds = [cmd for cmd in script.commands if cmd.name == "assert"]
+    if verbose:
+        print("Initial assertions: ", assert_cmds)
+
     non_assert_cmds = [cmd for cmd in script.commands if cmd.name != "assert"]
 
     if num_to_remove >= len(assert_cmds):
         print("Requested more assertions to remove than available. Skipping.")
         return script
 
+    random.seed(seed)
     keep_indices = sorted(random.sample(range(len(assert_cmds)), len(assert_cmds) - num_to_remove))
     kept_asserts = [assert_cmds[i] for i in keep_indices]
+    if verbose:
+        print("Assertions after removal: ", kept_asserts)
 
     new_commands = non_assert_cmds + kept_asserts
-    return SmtLibScript(new_commands, script.logic)
+    new_script = SmtLibScript()
+    for cmd in new_commands:
+        new_script.add_command(cmd)
+    return new_script
+
 
 def write_smt2_script(script: SmtLibScript, output_path: str):
-    with open(output_path, "w") as f:
-        f.write(f"(set-logic {script.logic})\n")
-        for cmd in script.commands:
-            f.write(cmd.serialize())
-            f.write("\n")
+    """
+    Writes SmtLibScript to a file.
+    :param script: SmtLibScript instance.
+    :param output_path: Path to save script file.
+    """
+
+    script.to_file(output_path)
+
 
 def validate_with_z3(file_path):
+    """
+    Validates the SmtLibScript found in the provided file with a Z3 solver.
+    :param file_path: Path to SmtLibScript to verify.
+    """
+
     try:
         result = subprocess.run(["z3", file_path], capture_output=True, text=True)
         return result.returncode == 0
     except FileNotFoundError:
         print("Z3 not found. Skipping validation.")
         return False
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -59,6 +92,7 @@ def main():
         print("Output file is valid SMT-LIB (Z3 check passed).")
     else:
         print("Z3 reported an error. Output might be invalid.")
+
 
 if __name__ == "__main__":
     main()
