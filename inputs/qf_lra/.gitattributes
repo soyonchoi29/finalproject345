@@ -1,0 +1,10 @@
+dist_controller_15_3.inter.bmc_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+dist_controller_15_3.inter.ind_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+fisher_ring_20_3.inter.bmc_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+fisher_star_20_3.inter.bmc_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+rod_30_3.inter.bmc_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+rod_30_3.inter.ind_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+bmwlin_20_5_1.inter.bmc_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+bmwlin_20_5_1.inter.ind_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+fisher_ring_20_3.inter.ind_k100.smt2 filter=lfs diff=lfs merge=lfs -text
+fisher_star_20_3.inter.ind_k100.smt2 filter=lfs diff=lfs merge=lfs -text
