@@ -2,6 +2,7 @@ import argparse
 import random
 import time
 import numpy as np
+from pysmt.smtlib.solver import SmtLibSolver
 
 from random_remove import load_smt2_script, remove_random_asserts, write_smt2_script
 
