@@ -1,4 +1,4 @@
-import re
+import argparse
 import random
 import time
 import subprocess
@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 
 
 INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p5-driverlogNumeric_s9.smt2"
-Z3_PATH = "z3"  
 
 
 def split_assert_blocks(lines):
@@ -58,9 +57,10 @@ def write_smt_file(non_asserts, kept_asserts, out_file):
         f.write("(exit)\n")
 
 
-def run_z3(smt_script):
+def run_solver(smt_script, solver_name="z3"):
     try:
-        z3solver = Solver("z3", "QF_LRA")
+        # solver_name can be "z3", "cvc5", etc.
+        z3solver = Solver(solver_name, "QF_LRA")
         z3solver.add_assertion(smt_script.get_strict_formula())
         for _ in range(3):
             z3solver.solve()
@@ -75,7 +75,7 @@ def run_z3(smt_script):
         return "timeout", float('inf')
 
 
-def progressive_removal_experiment(input_file, max_removals, seed=42):
+def progressive_removal_experiment(input_file, max_removals, solver_name="z3", seed=42):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
@@ -95,12 +95,7 @@ def progressive_removal_experiment(input_file, max_removals, seed=42):
         temp_file = "temp_reduced.smt2"
         write_smt_file(non_asserts, kept, temp_file)
         new_script = parser.get_script_fname(temp_file)
-        # for cmd in non_asserts:
-        #     new_script.add_command(cmd)
-        # for cmd in kept:
-        #     new_script.add_command(cmd)
-
-        result, runtime = run_z3(new_script)
+        result, runtime = run_solver(new_script, solver_name=solver_name)
         print(f"Removed {k} constraints. Time: {runtime:.3f}s, Result: {result}")
         results_timing.append(runtime)
         results_sat.append(result)
@@ -123,12 +118,18 @@ def plot_results(results, xlabel, ylabel):
 
 
 if __name__ == "__main__":
-    num_trials=5
-    seed=42
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input-file", type=str, default=INPUT_PATH, help="Path to the original SMT-LIB file")
+    parser.add_argument("--solver", type=str, default="z3", help="Name of solver to use")
+    parser.add_argument("--max-removals", type=int, default=100, help="Max number of assertions to remove randomly")
+    parser.add_argument("--num-trials", type=int, default=100, help="Number of trials to run")
+    parser.add_argument("--seed", type=int, default=42, help="Base seed for random removal")
+    args = parser.parse_args()
+
     results_timing = []
     results_sat = []
-    for i in range(num_trials):
-        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removals=100, seed=seed+i)
+    for i in range(args.num_trials):
+        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removals=args.max_removals, solver_name=args.solver, seed=args.seed+i)
         results_timing.append(intermediate_res_timing)
         results_sat.append(intermediate_res_sat)
     results_timing = np.array(results_timing, dtype = np.float32)
