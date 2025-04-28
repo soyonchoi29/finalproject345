@@ -3,11 +3,15 @@ import random
 import time
 import subprocess
 from pathlib import Path
+from pysmt.shortcuts import *
+from pysmt.smtlib.parser.parser import SmtLibParser
+from pysmt.smtlib.script import SmtLibScript, evaluate_command
+from pysmt.smtlib.solver import SmtLibSolver
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p2-driverlogNumeric_s10.smt2"
+INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p5-driverlogNumeric_s9.smt2"
 Z3_PATH = "z3"  
 
 
@@ -31,7 +35,12 @@ def split_assert_blocks(lines):
                 all_asserts.append("".join(current_block))
                 in_assert = False
         else:
-            non_assert_lines.append(line)
+            if "(check" in line:
+                continue
+            elif "(exit" in line:
+                continue
+            else:
+                non_assert_lines.append(line)
     
     return non_assert_lines, all_asserts
 
@@ -42,21 +51,26 @@ def write_smt_file(non_asserts, kept_asserts, out_file):
             if "(set-info :status" not in line:
                 f.write(line)
         for a in kept_asserts:
+            if "(check" in a:
+                continue
             f.write(a)
         f.write("(check-sat)\n")
+        f.write("(exit)\n")
 
 
-def run_z3(smt_file):
-    start = time.time()
+def run_z3(smt_script):
     try:
-        result = subprocess.run(
-            [Z3_PATH, smt_file],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30
-        )
+        z3solver = Solver("z3", "QF_LRA")
+        z3solver.add_assertion(smt_script.get_strict_formula())
+        for _ in range(3):
+            z3solver.solve()
+        start = time.time()
+        result = z3solver.solve()
         elapsed = time.time() - start
-        return result.stdout.decode().strip(), elapsed
+        if result:
+            return "sat", elapsed
+        if not result:
+            return "unsat", elapsed
     except subprocess.TimeoutExpired:
         return "timeout", float('inf')
 
@@ -65,7 +79,6 @@ def progressive_removal_experiment(input_file, max_removals, seed=42):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
-    random.seed(seed)
     non_asserts, all_asserts = split_assert_blocks(lines)
     total = len(all_asserts)
 
@@ -76,10 +89,18 @@ def progressive_removal_experiment(input_file, max_removals, seed=42):
     total_removals = min(total, max_removals)
 
     for k in range(1, total_removals + 1):
+        random.seed(seed)
         kept = random.sample(all_asserts, total - k)
+        parser = SmtLibParser()
         temp_file = "temp_reduced.smt2"
         write_smt_file(non_asserts, kept, temp_file)
-        result, runtime = run_z3(temp_file)
+        new_script = parser.get_script_fname(temp_file)
+        # for cmd in non_asserts:
+        #     new_script.add_command(cmd)
+        # for cmd in kept:
+        #     new_script.add_command(cmd)
+
+        result, runtime = run_z3(new_script)
         print(f"Removed {k} constraints. Time: {runtime:.3f}s, Result: {result}")
         results_timing.append(runtime)
         results_sat.append(result)
@@ -102,7 +123,7 @@ def plot_results(results, xlabel, ylabel):
 
 
 if __name__ == "__main__":
-    num_trials=100
+    num_trials=5
     seed=42
     results_timing = []
     results_sat = []
