@@ -9,6 +9,7 @@ from pysmt.smtlib.script import SmtLibScript, evaluate_command
 from pysmt.smtlib.solver import SmtLibSolver
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 
 INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p5-driverlogNumeric_s9.smt2"
@@ -34,12 +35,7 @@ def split_assert_blocks(lines):
                 all_asserts.append("".join(current_block))
                 in_assert = False
         else:
-            if "(check" in line:
-                continue
-            elif "(exit" in line:
-                continue
-            else:
-                non_assert_lines.append(line)
+            non_assert_lines.append(line)
     
     return non_assert_lines, all_asserts
 
@@ -92,7 +88,7 @@ def progressive_removal_experiment(input_file, max_removals, solver_name="z3", s
         random.seed(seed)
         kept = random.sample(all_asserts, total - k)
         parser = SmtLibParser()
-        temp_file = "temp_reduced.smt2"
+        temp_file = f"temp_reduced_{solver_name}.smt2"
         write_smt_file(non_asserts, kept, temp_file)
         new_script = parser.get_script_fname(temp_file)
         result, runtime = run_solver(new_script, solver_name=solver_name)
@@ -107,7 +103,7 @@ def postprocess_data(results):
     means = np.mean(results, axis=0)
     meds = np.median(results, axis=0)
     # print(means.shape)
-    return meds
+    return means
 
 
 def plot_results(results, xlabel, ylabel):
@@ -129,9 +125,15 @@ if __name__ == "__main__":
     results_timing = []
     results_sat = []
     for i in range(args.num_trials):
+        print("===================================================================================")
+        print(f" =================================== TRIAL {i} ===================================")
+        print("===================================================================================")
+
         intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removals=args.max_removals, solver_name=args.solver, seed=args.seed+i)
         results_timing.append(intermediate_res_timing)
         results_sat.append(intermediate_res_sat)
     results_timing = np.array(results_timing, dtype = np.float32)
+    pickle.dump(results_timing, open(f'results_{args.solver}.pkl', 'wb'))
+    # results_timing = pickle.load(open(f'results_{args.solver}.pkl', 'rb'))
     results_means = postprocess_data(results_timing)
-    plot_results(results_means, "Number of Removed Constraints", "Z3 Solver Runtime")
+    plot_results(results_means, "Number of Removed Constraints", f"{args.solver} Solver Runtime")
