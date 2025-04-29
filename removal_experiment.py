@@ -56,12 +56,13 @@ def write_smt_file(non_asserts, kept_asserts, out_file):
 def run_solver(smt_script, solver_name="z3"):
     try:
         # solver_name can be "z3", "cvc5", "msat"
-        z3solver = Solver(solver_name, "QF_LRA")
-        z3solver.add_assertion(smt_script.get_strict_formula())
-        for _ in range(3):
-            z3solver.solve()
+        solver = Solver(solver_name, "QF_LRA")
+        solver.add_assertion(smt_script.get_strict_formula())
+        # start up solver so there is no overhead
+        for _ in range(5):
+            solver.solve()
         start = time.time()
-        result = z3solver.solve()
+        result = solver.solve()
         elapsed = time.time() - start
         if result:
             return "sat", elapsed
