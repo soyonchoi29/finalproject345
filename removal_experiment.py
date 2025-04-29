@@ -71,7 +71,7 @@ def run_solver(smt_script, solver_name="z3"):
         return "timeout", float('inf')
 
 
-def progressive_removal_experiment(input_file, max_removals, solver_name="z3", seed=42):
+def progressive_removal_experiment(input_file, max_removal=0.5, step_size=100, solver_name="z3", seed=42):
     with open(input_file, 'r') as f:
         lines = f.readlines()
 
@@ -82,9 +82,9 @@ def progressive_removal_experiment(input_file, max_removals, solver_name="z3", s
     results_timing = []
     results_sat = []
 
-    total_removals = min(total, max_removals)
+    max_removals = int(total*max_removal)
 
-    for k in range(1, total_removals + 1):
+    for k in range(1, max_removals + step_size, step_size):
         random.seed(seed)
         kept = random.sample(all_asserts, total - k)
         parser = SmtLibParser()
@@ -117,7 +117,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-file", type=str, default=INPUT_PATH, help="Path to the original SMT-LIB file")
     parser.add_argument("--solver", type=str, default="z3", help="Name of solver to use")
-    parser.add_argument("--max-removals", type=int, default=100, help="Max number of assertions to remove randomly")
+    parser.add_argument("--max-removal", type=float, default=0.5, help="Max portion of assertions to remove randomly")
+    parser.add_argument("--step-size", type=int, default=100, help="Number of trials to run")
     parser.add_argument("--num-trials", type=int, default=100, help="Number of trials to run")
     parser.add_argument("--seed", type=int, default=42, help="Base seed for random removal")
     args = parser.parse_args()
@@ -129,11 +130,11 @@ if __name__ == "__main__":
         print(f" =================================== TRIAL {i} ===================================")
         print("===================================================================================")
 
-        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removals=args.max_removals, solver_name=args.solver, seed=args.seed+i)
+        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removal=args.max_removal, step_size=args.step_size, solver_name=args.solver, seed=args.seed+i)
         results_timing.append(intermediate_res_timing)
         results_sat.append(intermediate_res_sat)
     results_timing = np.array(results_timing, dtype = np.float32)
-    pickle.dump(results_timing, open(f'results_{args.solver}.pkl', 'wb'))
+    pickle.dump(results_timing, open(f'results_{args.solver}_0.5.pkl', 'wb'))
     # results_timing = pickle.load(open(f'results_{args.solver}.pkl', 'rb'))
     results_means = postprocess_data(results_timing)
     plot_results(results_means, "Number of Removed Constraints", f"{args.solver} Solver Runtime")
