@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import pickle
 
 
-INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p5-driverlogNumeric_s9.smt2"
+INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p2-driverlogNumeric_s10.smt2"
 
 
 def split_assert_blocks(lines):
@@ -43,10 +43,12 @@ def split_assert_blocks(lines):
 def write_smt_file(non_asserts, kept_asserts, out_file):
     with open(out_file, "w") as f:
         for line in non_asserts:
+            if "(check" in line or "(exit" in line:
+                continue
             if "(set-info :status" not in line:
                 f.write(line)
         for a in kept_asserts:
-            if "(check" in a:
+            if "(check" in a or "(exit" in a:
                 continue
             f.write(a)
         f.write("(check-sat)\n")
