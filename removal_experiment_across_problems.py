@@ -15,8 +15,12 @@ import csv
 
 Z3_PATH = "z3"  
 INPUT_DIR = "./inputs/non-incremental/QF_LRA/TM/"
-PERCENTAGES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
-NUM_TRIALS = 10
+# PERCENTAGES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+# PERCENTAGES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+PERCENTAGES = [0, 1, 2, 5, 10, 25, 50]
+
+
+NUM_TRIALS = 5
 
 def split_assert_blocks(lines):
     all_asserts = []
@@ -104,20 +108,30 @@ def experiment_on_file(file_path, percentages, num_trials=50, solver_name="z3"):
     return timings_means
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--solver", type=str, default="z3", help="Name of solver to use")
+    args = parser.parse_args()
+
+    solver = args.solver
+
     all_files = sorted(Path(INPUT_DIR).glob("*.smt2"))
     results = []
     file_names = []
 
+    i = 0
+
     for file in all_files:
+        # if file.name != "p5-driverlogNumeric_s8.smt2":
+        #     continue
         print(f"Processing {file.name}...")
-        timings = experiment_on_file(file, PERCENTAGES, num_trials=NUM_TRIALS)
+        timings = experiment_on_file(file, PERCENTAGES, num_trials=NUM_TRIALS, solver_name = solver)
         results.append(timings)
         file_names.append(file.stem)
 
     results = np.array(results)
 
     # Save results to CSV
-    csv_file = "experiment_results.csv"
+    csv_file = f"experiment_results_{solver}.csv"
     with open(csv_file, mode="w", newline="") as f:
         writer = csv.writer(f)
         header = ["Filename"] + [f"{pct}% Removed" for pct in PERCENTAGES]
@@ -127,7 +141,7 @@ def main():
     print(f"Results saved to {csv_file}")
 
     # Save results to Pickle
-    pickle_file = "experiment_results.pkl"
+    pickle_file = f"experiment_results_{solver}.pkl"
     with open(pickle_file, "wb") as f:
         pickle.dump({
             "file_names": file_names,
