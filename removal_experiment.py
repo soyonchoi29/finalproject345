@@ -10,9 +10,13 @@ from pysmt.smtlib.solver import SmtLibSolver
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+from multiprocessing import Process, Manager
 
+# INPUT_FILE = "p5-driverlogNumeric_s9.smt2"
+# INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM"
 
-INPUT_PATH = "./inputs/non-incremental/QF_LRA/TM/p2-driverlogNumeric_s10.smt2"
+INPUT_FILE = "MC_05.smt2"
+INPUT_PATH = "./inputs/non-incremental/QF_NIA/20220315-MathProblems"
 
 
 def split_assert_blocks(lines):
@@ -55,23 +59,48 @@ def write_smt_file(non_asserts, kept_asserts, out_file):
         f.write("(exit)\n")
 
 
-def run_solver(smt_script, solver_name="z3"):
+def run_solver(smt_script, solver_name="z3", timeout=60):
     try:
-        # solver_name can be "z3", "cvc5", "msat"
-        solver = Solver(solver_name, "QF_LRA")
-        solver.add_assertion(smt_script.get_strict_formula())
-        # start up solver so there is no overhead
-        for _ in range(5):
-            solver.solve()
+        manager = Manager()
+        return_dict = manager.dict()
+        return_dict['return'] = None
+
+        p = Process(target=solve, args=(smt_script, solver_name, return_dict))
+        p.start()
         start = time.time()
-        result = solver.solve()
+        res = p.join(timeout)  # this blocks until the process terminates
+        p.terminate()
         elapsed = time.time() - start
-        if result:
+        if return_dict['return'] is True:
             return "sat", elapsed
-        if not result:
+        elif return_dict['return'] is False:
             return "unsat", elapsed
+        elif res is None and return_dict['return'] is None:
+            # timed out
+            return "timeout", timeout
+
+        # # keep going if no timeout
+        # solver = Solver(solver_name, "QF_NIA")
+        # solver.add_assertion(smt_script.get_strict_formula())
+        #
+        # # start up solver so there is no overhead
+        # for _ in range(5):
+        #     solver.solve()
+        # start = time.time()
+        # result = solver.solve()
+        # elapsed = time.time() - start
     except subprocess.TimeoutExpired:
-        return "timeout", float('inf')
+        return "timeout", timeout
+
+
+def solve(smt_script, solver_name, return_dict):
+    # solver_name can be "z3", "cvc5", "msat"
+    solver = Solver(solver_name, "QF_NIA")
+    solver.add_assertion(smt_script.get_strict_formula())
+    result = solver.solve()
+    print(result)
+    return_dict['return'] = result
+    return result
 
 
 def progressive_removal_experiment(input_file, max_removal=0.5, step_size=100, solver_name="z3", seed=42):
@@ -104,13 +133,12 @@ def progressive_removal_experiment(input_file, max_removal=0.5, step_size=100, s
 
 def postprocess_data(results):
     means = np.mean(results, axis=0)
-    meds = np.median(results, axis=0)
     # print(means.shape)
     return means
 
 
-def plot_results(results, xlabel, ylabel):
-    plt.plot(np.array(range(results.shape[0]))+1, results)
+def plot_results(results, xlabel, ylabel, step_size=100):
+    plt.plot(range(1, results.shape[0]*step_size, step_size), results)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.show()
@@ -118,10 +146,10 @@ def plot_results(results, xlabel, ylabel):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input-file", type=str, default=INPUT_PATH, help="Path to the original SMT-LIB file")
+    parser.add_argument("--input-file", type=str, default=INPUT_FILE, help="Path to the original SMT-LIB file")
     parser.add_argument("--solver", type=str, default="z3", help="Name of solver to use")
     parser.add_argument("--max-removal", type=float, default=0.5, help="Max portion of assertions to remove randomly")
-    parser.add_argument("--step-size", type=int, default=100, help="Number of trials to run")
+    parser.add_argument("--step-size", type=int, default=15, help="Number of constraints to remove at each increment")
     parser.add_argument("--num-trials", type=int, default=100, help="Number of trials to run")
     parser.add_argument("--seed", type=int, default=42, help="Base seed for random removal")
     args = parser.parse_args()
@@ -133,11 +161,12 @@ if __name__ == "__main__":
         print(f" =================================== TRIAL {i} ===================================")
         print("===================================================================================")
 
-        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH, max_removal=args.max_removal, step_size=args.step_size, solver_name=args.solver, seed=args.seed+i)
+        intermediate_res_timing, intermediate_res_sat = progressive_removal_experiment(INPUT_PATH+"/"+args.input_file, max_removal=args.max_removal, step_size=args.step_size, solver_name=args.solver, seed=args.seed+i)
         results_timing.append(intermediate_res_timing)
         results_sat.append(intermediate_res_sat)
     results_timing = np.array(results_timing, dtype = np.float32)
-    pickle.dump(results_timing, open(f'results_{args.solver}_0.5.pkl', 'wb'))
-    # results_timing = pickle.load(open(f'results_{args.solver}.pkl', 'rb'))
+    pickle.dump(results_timing, open(f'results_{args.solver}_{args.input_file[:-5]}_{args.max_removal}.pkl', 'wb'))
+    # results_timing = pickle.load(open(f'results_{args.solver}_{args.input_file[:-5]}_{args.max_removal}.pkl', 'rb'))
+    # results_timing = pickle.load(open(f'results_z3_0.5.pkl', 'rb'))
     results_means = postprocess_data(results_timing)
-    plot_results(results_means, "Number of Removed Constraints", f"{args.solver} Solver Runtime")
+    plot_results(results_means, "Number of Removed Constraints", f"{args.solver} Solver Runtime", step_size=args.step_size)
